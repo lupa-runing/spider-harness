@@ -10378,6 +10378,15 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
     .rep-dim u{text-decoration:none;flex:1;height:8px;background:rgba(120,170,255,.14);border-radius:4px;overflow:hidden}
     .rep-dim u s{display:block;height:100%;background:linear-gradient(90deg,#5fa8ff,#8fd4ff)}
     .rep-dim b{width:30px;text-align:right;font-weight:600;color:#e8f1ff;flex:none}
+    .md-h1{font:700 16px/1.5 var(--cjk);color:#ffe9f2;margin:6px 0 2px}
+    .md-h2{font:700 14px/1.5 var(--cjk);color:#bfe2ff;margin:6px 0 2px}
+    .md-h3{font:700 12.5px/1.5 var(--cjk);color:#8fd4ff;margin:4px 0 2px}
+    .md-q{border-left:3px solid rgba(255,210,122,.6);padding:2px 0 2px 10px;margin:3px 0;color:#e8d9a8}
+    .md-li{margin:2px 0 2px 6px}
+    .md-p{margin:3px 0}
+    .md-gap{height:6px}
+    .tc-md hr{border:none;border-top:1px solid rgba(120,170,255,.25);margin:8px 0}
+    .tc-md code{color:#ffd27a;font-family:var(--mono)}
   `;
   SR.appendChild(stEl2);
 
@@ -10385,6 +10394,18 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
   const el = {list: q('.tc-list'), detail: q('.tc-detail'), title: q('.tc-title'), meta: q('.tc-meta'),
               back: q('.tc-back'), note: q('.tc-note'), refresh: q('.tc-refresh'), close: q('.tc-close')};
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const md2html = md => esc(md).split('\n').map(l => {
+    if (/^###\s/.test(l)) return `<div class="md-h3">${l.slice(4)}</div>`;
+    if (/^##\s/.test(l)) return `<div class="md-h2">${l.slice(3)}</div>`;
+    if (/^#\s/.test(l)) return `<div class="md-h1">${l.slice(2)}</div>`;
+    if (/^---*$/.test(l.trim())) return '<hr>';
+    if (/^>\s?/.test(l)) return `<div class="md-q">${l.replace(/^>\s?/, '')}</div>`;
+    if (/^[-*]\s/.test(l)) return `<div class="md-li">· ${l.slice(2)}</div>`;
+    if (/^\d+\.\s/.test(l)) return `<div class="md-li">${l}</div>`;
+    return l ? `<div class="md-p">${l}</div>` : '<div class="md-gap"></div>';
+  }).join('')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
   const fmtT = ts => { if (!ts) return ''; const d = new Date(ts * 1000);
     return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
   const badge = (st, final) => {
@@ -10436,7 +10457,8 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
     const video = files.find(f => /\.mp4$/i.test(f)) || (d.pkg && d.pkg.video);
     const cover = files.find(f => f.includes('封面')) || (d.pkg && d.pkg.cover);
     const frames = (d.pkg && d.pkg.frames) || files.filter(f => /分镜/.test(f));
-    const imgs = [...new Set([cover, ...frames].filter(Boolean))];
+    const gallery = (d.pkg && d.pkg.gallery) || files.filter(f => /配图/.test(f));
+    const imgs = [...new Set([cover, ...gallery, ...frames].filter(Boolean))];
     const cp = parseCopy(d);
     let h = '';
     if (d.requirement) h += `<div class="tc-sec"><div class="tc-sec-t">需求原文</div><div class="tc-md">${esc(d.requirement)}</div></div>`;
@@ -10465,7 +10487,8 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
       d.notes.map(n => `<div class="rep-line">${esc(n)}</div>`).join('') + `</div>`;
     if ((d.outputs || []).length) h += `<div class="tc-sec"><div class="tc-sec-t">执行产物（各工位产出）</div>` +
       d.outputs.map(o => `<div class="rep-line">${esc(o)}</div>`).join('') + `</div>`;
-    if (d.pub_md) h += `<div class="tc-sec"><div class="tc-sec-t">发布说明</div><div class="tc-md">${esc(d.pub_md)}</div></div>`;
+    if (d.pub_md) h += `<div class="tc-sec"><div class="tc-sec-t">发布说明</div><div class="tc-md">${md2html(d.pub_md)}</div></div>`;
+    if (d.status === 'running' && d.final) h += `<div class="tc-sec"><div class="tc-md" style="color:#ffd27a">⏳ 执行中：视频分镜与剩余产物生成后，点右上「刷新」即可看到更新。</div></div>`;
     if (files.length) h += `<div class="tc-sec"><div class="tc-sec-t">交付文件（点击打开/下载）</div>` +
       files.map(f => `<div class="rep-line"><a href="/${esc(f)}" target="_blank" style="color:#8fd4ff">▾ ${esc(f.split('/').pop())}</a> <span style="color:#7f93b8">· ${esc(f)}</span></div>`).join('') + `</div>`;
     return h || '暂无数据';

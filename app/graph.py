@@ -373,17 +373,44 @@ async def _xhs_build(key: str, state: dict, result: LLMResult, writer) -> tuple[
             accent = tuple(int(c) for c in (data.get("accent") or accent))
         except (TypeError, ValueError):
             pass
-        cover, used_ai = None, False
+        # 需求里的图片数量约束：如「最少4张图片」「4张图」；默认 4（封面 1 + 配图 3）
+        import re as _re2
+        mc = _re2.search(r"最少\s*(\d+)\s*张", state["requirement"]) or _re2.search(r"(\d+)\s*张图", state["requirement"])
+        n_total = max(4, int(mc.group(1))) if mc else 4
+        n_extra = n_total - 1
+
         ip = str(data.get("imagePrompt") or "").strip() or \
             f"xiaohongshu cover style product photography of {state['requirement'][:60]}, bright aesthetic, soft daylight, clean composition, no text"
+
+        async def gen_one(idx: int, prompt_en: str, cap: str) -> str:
+            out = tools.task_dir(tid) / f"配图_{idx}.jpg"
+            img, raw = None, tools.task_dir(tid) / f"_rawc{idx}.jpg"
+            if settings.liblib_access_key and settings.liblib_secret_key:
+                try:
+                    await asyncio.sleep(idx * 1.3)          # 提交 QPS 1，错峰
+                    img = await liblib_gen(prompt_en[:2000], raw, settings.liblib_access_key,
+                                           settings.liblib_secret_key, w=1080, h=1440)
+                except Exception as e:
+                    print(f"[liblib] 配图{idx} 失败: {str(e)[:120]}")
+            if img is not None:
+                ai_flags[idx] = True
+                tools.overlay_card(img, out, cap, [], w=1080, h=1440, accent=accent)
+                raw.unlink(missing_ok=True)
+            else:
+                ai_flags[idx] = False
+                tools.text_card(out, cap or f"{title} · {idx}", lines[:2], w=1080, h=1440, accent=accent)
+            return tools.rel(out)
+
+        cover, used_ai = None, False
         if settings.liblib_access_key and settings.liblib_secret_key:
             try:
                 if writer:
-                    writer({"say": {"agent": 4, "text": "调用 LiblibAI 生成封面…"}})
+                    writer({"say": {"agent": 4, "text": f"调用 LiblibAI 生成封面 + {n_extra} 张配图…"}})
                 raw = tools.task_dir(tid) / "_cover_raw.jpg"
                 cover = await liblib_gen(ip, raw, settings.liblib_access_key, settings.liblib_secret_key, w=1080, h=1440)
                 used_ai = True
-            except Exception:
+            except Exception as e:
+                print(f"[liblib] 封面失败: {str(e)[:120]}")
                 cover = None
         out_cover = tools.task_dir(tid) / "封面_3x4.jpg"
         if cover is not None:
@@ -392,10 +419,38 @@ async def _xhs_build(key: str, state: dict, result: LLMResult, writer) -> tuple[
         else:
             tools.text_card(out_cover, title, lines[:3], w=1080, h=1440, accent=accent, badge=badge)
         pkg.update({"cover": tools.rel(out_cover), "accent": list(accent)})
+
+        # 配图 N 张：优先用模型的 shots 提示词，不足用确定性变体补齐
+        base_ip = ip
+        shots = [s for s in (data.get("shots") or []) if isinstance(s, dict) and s.get("imagePrompt")]
+        variants = [
+            "wide lifestyle scene featuring the product in daily use, natural window light, cozy mood, no text",
+            "macro close-up of the product material and texture, soft studio light, premium feel, no text",
+            "a young student using the product outdoors, candid street style, golden hour, no text",
+            "flat lay top view of the product with matching props on pastel background, no text",
+        ]
+        ai_flags = {}
+        extra_jobs = []
+        for i in range(n_extra):
+            p = str(shots[i].get("imagePrompt")) if i < len(shots) else ""
+            p = (p.strip() or f"{base_ip}, {variants[i % len(variants)]}")
+            cap = str(shots[i].get("cap", ""))[:8] if i < len(shots) else ""
+            extra_jobs.append((i + 1, p, cap))
+        results = list(await asyncio.gather(*[gen_one(i, p, cap) for i, p, cap in extra_jobs])) if extra_jobs else []
+        # 二次补拍：首轮失败的配图逐张再试一次（网络抖动恢复后能补上）
+        for idx, (i, p, cap) in enumerate(extra_jobs):
+            if ai_flags.get(i):
+                continue
+            try:
+                results[idx] = await gen_one(i, p, cap)
+            except Exception:
+                pass
+        gallery = results
+        pkg["gallery"] = [pkg["cover"]] + gallery
         if writer:
-            writer({"say": {"agent": 4, "text": "封面已出 · " + title}})
-            _emit_files(writer, tid, [pkg["cover"]])
-        return pkg, f"[DESIGN] 封面 {pkg['cover']} 已生成（{'AI 图' if used_ai else '文字卡'}，主色 {accent}）"
+            writer({"say": {"agent": 4, "text": f"图片就绪 · {len(pkg['gallery'])} 张"}})
+            _emit_files(writer, tid, pkg["gallery"])
+        return pkg, (f"[DESIGN] 图片 {len(pkg['gallery'])} 张已生成（封面{'AI' if used_ai else '文字卡'} + 配图 {sum(ai_flags.values())}/{len(gallery)} AI）")
 
     if key == "CUT":
         if writer:
@@ -451,6 +506,13 @@ async def _xhs_build(key: str, state: dict, result: LLMResult, writer) -> tuple[
         hit = [w for w in banned if w in (title + body)]
         if hit:
             issues.append("疑似极限词/绝对化用语：" + "、".join(hit))
+        # 图片数量约束校验（与 DESIGN 同一解析口径）
+        import re as _re2
+        _mc = _re2.search(r"最少\s*(\d+)\s*张", state["requirement"]) or _re2.search(r"(\d+)\s*张图", state["requirement"])
+        n_need = max(4, int(_mc.group(1))) if _mc else 4
+        n_have = len(pkg.get("gallery", []))
+        if n_have < n_need:
+            issues.append(f"图片不足（{n_have}/{n_need} 张）")
         # 打回重写环：有问题就让 COPY 重写一版并重新落盘，直到本地校验通过
         if issues:
             try:
@@ -509,6 +571,7 @@ async def _xhs_build(key: str, state: dict, result: LLMResult, writer) -> tuple[
     )
     f = tools.write_file(tid, "发布说明.md", pub)
     files = [pkg.get(k) for k in ("copy_file", "cover", "video", "srt") if pkg.get(k)]
+    files += [x for x in pkg.get("gallery", []) if x != pkg.get("cover")]
     files += [x for x in pkg.get("frames", []) if x]
     files.append(f)
     pkg["all_files"] = [x for x in dict.fromkeys(files) if x]

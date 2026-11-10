@@ -124,10 +124,11 @@ def overlay_card(bg: Path, out: Path, title: str, lines: list[str], w: int, h: i
         dr.rounded_rectangle([pad, y, pad + tw + 44, y + 60], 30, fill=accent + (255,))
         dr.text((pad + 22, y + 11), badge, font=f, fill=(255, 255, 255, 255))
         y += 92
-    for row in _wrap(dr, title, _load_font(84, True), w - pad * 2):
-        dr.text((pad, y), row, font=_load_font(84, True), fill=(255, 255, 255, 255))
-        y += 112
-    y += 14
+    if title:
+        for row in _wrap(dr, title, _load_font(84, True), w - pad * 2):
+            dr.text((pad, y), row, font=_load_font(84, True), fill=(255, 255, 255, 255))
+            y += 112
+        y += 14
     for line in lines:
         for row in _wrap(dr, line, _load_font(42), w - pad * 2):
             dr.text((pad, y), row, font=_load_font(42), fill=(226, 234, 246, 255))

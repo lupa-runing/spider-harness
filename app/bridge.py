@@ -196,7 +196,8 @@ class Harness:
                 rec.req["final"] = s["score"]
             self.publish("req_rejected", {"id": rec.id, **s})
         elif "pkg" in payload:
-            rec.pkg = payload["pkg"] or {}
+            p = payload["pkg"]
+            rec.pkg = p.get("pkg", p) if isinstance(p, dict) else {}
         elif "files" in payload:
             rec.files = [str(x) for x in payload["files"].get("files", [])]
             self.publish("files", {"id": rec.id, "files": rec.files})

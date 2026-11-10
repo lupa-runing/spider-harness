@@ -46,32 +46,40 @@ async def generate(prompt_en: str, out: Path, ak: str, sk: str,
                                "imageSize": {"width": max(512, min(2048, w)), "height": max(512, min(2048, h))}}}
     async with httpx.AsyncClient(timeout=30) as client:
         gen_uuid = None
-        for attempt in range(3):                   # 提交重试（QPS 限制 / 网络抖动）
+        for attempt in range(4):                   # 提交重试（QPS 限制 / 网络抖动）
             try:
                 r = await client.post(BASE + uri, params=_auth_params(uri, ak, sk), json=body)
                 r.raise_for_status()
                 j = r.json()
                 if j.get("code") != 0:
-                    raise RuntimeError(f"liblib submit: {j.get('msg')}")
+                    msg = str(j.get("msg"))
+                    if "Insufficient" in msg or "余额" in msg or "积分" in msg:
+                        raise RuntimeError(f"liblib 积分不足: {msg}")
+                    raise RuntimeError(f"liblib submit: {msg}")
                 gen_uuid = j["data"]["generateUuid"]
                 break
-            except (httpx.HTTPStatusError, httpx.TransportError) as e:
-                if attempt == 2:
+            except RuntimeError:
+                raise
+            except (httpx.HTTPStatusError, httpx.TransportError):
+                if attempt == 3:
                     raise
-                await asyncio.sleep(1.5 * (attempt + 1))
+                await asyncio.sleep(1.5 * (2 ** attempt))
 
         quri = "/api/generate/webui/status"
         deadline = time.time() + max_wait
         images = []
         while time.time() < deadline:
             await asyncio.sleep(3)
-            q = await client.post(BASE + quri, params=_auth_params(quri, ak, sk),
-                                  json={"generateUuid": gen_uuid})
-            q.raise_for_status()
-            d = q.json().get("data") or {}
-            images = d.get("images") or []
-            if images:
-                break
+            try:
+                q = await client.post(BASE + quri, params=_auth_params(quri, ak, sk),
+                                      json={"generateUuid": gen_uuid})
+                q.raise_for_status()
+                d = q.json().get("data") or {}
+                images = d.get("images") or []
+                if images:
+                    break
+            except httpx.TransportError:
+                continue                           # 轮询网络抖动：下个周期再查
         if not images:
             raise RuntimeError(f"liblib 超时未出图（status={d.get('generateStatus')}）")
         img_url = images[0]["imageUrl"]

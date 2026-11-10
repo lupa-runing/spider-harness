@@ -111,7 +111,8 @@ XHS_JSON_INSTRUCTIONS: dict[str, str] = {
         '输出严格 JSON：{"title": "封面主标题 ≤10 字", "badge": "角标 ≤6 字（如 学生党狂喜）", '
         '"accent": [r, g, b] 主色（撞色，如 [255,79,121]）, "lines": ["封面要点行 ≤14 字", ...2-3 条], '
         '"imagePrompt": "English text-to-image prompt for the cover background: product hero scene, '
-        'style, lighting, no text in image, photorealistic"}'
+        'style, lighting, no text in image, photorealistic", '
+        '"shots": [{"imagePrompt": "English prompt for 配图", "cap": "配图标题 ≤8 字"} ...]（图文配图提示词数组，不含封面）}'
     ),
     "CUT": (
         '输出严格 JSON：{"segments": [{"say": "本段口播词 ≤40 字", "os": "画面文字卡标题 ≤12 字", '
