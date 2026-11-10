@@ -45,6 +45,7 @@ class TaskState(TypedDict):
     revision: int                                # 需求评审修订轮数
     revision_notes: Annotated[list[str], operator.add]   # CHIEF 修订补充（负责人/截止/验收等结构性约定）
     package: dict                                # W12 内容包：title/body/tags/cover/video/proof…
+    ai_video: bool                               # 是否额外生成 MiniMax AI 视频（较贵，按任务勾选）
     dims: list                                   # 七维评分
     final_score: int
     rejected: bool
@@ -487,6 +488,29 @@ async def _xhs_build(key: str, state: dict, result: LLMResult, writer) -> tuple[
         rendered = await tools.render_video(tid, parts)
         pkg.update({"video": rendered["video"], "srt": rendered["srt"], "dur": rendered["dur"],
                     "frames": [tools.rel(p["img"]) for p in parts]})
+
+        if state.get("ai_video") and settings.runninghub_api_key:
+            # 可选：MiniMax H3 AI 视频（参考封面保产品一致，约 3-8 分钟，失败不阻断）
+            try:
+                if writer:
+                    writer({"say": {"agent": 9, "text": "AI 视频生成中（MiniMax · 约 3-8 分钟）…"}})
+                from .imagerh import generate_video as rh_video, upload_binary as rh_upload
+                cover_path = tools.task_dir(tid) / "封面_3x4.jpg"
+                ref_urls = [await rh_upload(cover_path, settings.runninghub_api_key)] if cover_path.exists() else []
+                story = (f"商品种草短视频：{state['name']}。叙事线："
+                         + "；".join(str(sg.get('say', '')) for sg in segs)
+                         + "。竖屏商品广告质感，节奏明快，突出产品细节与使用场景，画面有吸引力。")
+                ai_out = tools.task_dir(tid) / "AI视频.mp4"
+                await rh_video(story, ai_out, settings.runninghub_api_key, aspect_ratio="9:16",
+                               resolution="768p", duration=10, ref_images=ref_urls, max_wait=900)
+                pkg["ai_video"] = tools.rel(ai_out)
+                if writer:
+                    writer({"say": {"agent": 9, "text": "AI 视频就绪"}})
+                    _emit_files(writer, tid, [pkg["ai_video"]])
+            except Exception as e:
+                print(f"[image] AI 视频失败（已保留图文版成片）: {str(e)[:160]}")
+                if writer:
+                    writer({"say": {"agent": 9, "text": "AI 视频生成失败，保留图文版成片"}})
         if writer:
             writer({"say": {"agent": 9, "text": f"成片合成 · {rendered['dur']} 秒"}})
             _emit_files(writer, tid, [rendered["video"], rendered["srt"]])
@@ -569,7 +593,7 @@ async def _xhs_build(key: str, state: dict, result: LLMResult, writer) -> tuple[
         f"- 评论区置顶：补充价格/购买方式，引导互动"
     )
     f = tools.write_file(tid, "发布说明.md", pub)
-    files = [pkg.get(k) for k in ("copy_file", "cover", "video", "srt") if pkg.get(k)]
+    files = [pkg.get(k) for k in ("copy_file", "cover", "video", "srt", "ai_video") if pkg.get(k)]
     files += [x for x in pkg.get("gallery", []) if x != pkg.get("cover")]
     files += [x for x in pkg.get("frames", []) if x]
     files.append(f)

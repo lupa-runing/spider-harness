@@ -10234,6 +10234,9 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
         <select class="req-wf"><option value="">自动匹配</option></select>
         <span class="req-hint"></span>
       </div>
+      <div class="req-row">
+        <label class="req-ai"><input type="checkbox" class="req-ai-box"> AI 视频生成（MiniMax 实拍感 · 约 3-8 分钟 · 消耗 RunningHub 额度）</label>
+      </div>
       <div class="req-row req-acts">
         <button class="req-x" type="button">取消</button>
         <button class="req-go" type="button">提交 · 逐站审读</button>
@@ -10253,6 +10256,8 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
     .req-row label{font:500 11px/1 var(--mono);letter-spacing:.12em;color:#7f93b8}
     .req-wf{font:500 12px/1 var(--cjk);color:#e8f1ff;background:rgba(3,7,16,.85);border:1px solid rgba(120,170,255,.3);border-radius:3px;padding:7px 9px;outline:none}
     .req-hint{font:400 11px/1.4 var(--cjk);color:#ff8fb8;flex:1;text-align:right}
+    .req-ai{display:flex;align-items:center;gap:8px;font:400 12px/1.4 var(--cjk);color:#9fb4d8;cursor:pointer}
+    .req-ai input{accent-color:#ff6fae;width:15px;height:15px;cursor:pointer}
     .req-acts{justify-content:flex-end}
     .req-go,.req-x{font:700 12px/1 var(--cjk);letter-spacing:.08em;padding:9px 16px;cursor:pointer;border-radius:3px}
     .req-go{color:#0a0710;background:linear-gradient(90deg,#ffb48f,#ff6fae);border:1px solid #ff9ec7}
@@ -10263,7 +10268,7 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
 
   const ta = mask.querySelector('.req-in'), sel = mask.querySelector('.req-wf'),
         hint = mask.querySelector('.req-hint'), go = mask.querySelector('.req-go'),
-        x = mask.querySelector('.req-x');
+        x = mask.querySelector('.req-x'), aiBox = mask.querySelector('.req-ai-box');
   let wfLoaded = false;
   const open = () => {
     mask.hidden = false; hint.textContent = '';
@@ -10289,7 +10294,7 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
     go.disabled = true; hint.textContent = '';
     try {
       const r = await fetch('/api/tasks', {method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({requirement: text, wf: sel.value || null})});
+        body: JSON.stringify({requirement: text, wf: sel.value || null, ai_video: aiBox.checked})});
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const j = await r.json();
       ta.value = ''; close();

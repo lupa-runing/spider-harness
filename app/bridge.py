@@ -44,6 +44,7 @@ class TaskRecord:
     cycle: float = 0.0
     req: dict | None = None  # NEBULA 需求评审：{sections:[{ai,words:[...]}], score, final}
     pkg: dict = field(default_factory=dict)      # W12 内容包：title/body/tags/cover/video/frames/proof
+    ai_video: bool = False                       # 是否生成 MiniMax AI 视频
     files: list = field(default_factory=list)    # 内容包交付文件（W12）
     briefs: list = field(default_factory=list)   # CHIEF 各站任务书
     notes: list = field(default_factory=list)    # 逐站审读结论 [KEY] 一句话
@@ -86,7 +87,7 @@ class Harness:
         self.subs.discard(q)
 
     # ---------------- 提交任务 ----------------
-    def submit(self, requirement: str, wf_id: str | None = None) -> TaskRecord:
+    def submit(self, requirement: str, wf_id: str | None = None, ai_video: bool = False) -> TaskRecord:
         self.seq += 1
         wf = WF_BY_ID[wf_id] if wf_id in WF_BY_ID else None
         if wf is None:
@@ -94,6 +95,7 @@ class Harness:
         rec = TaskRecord(
             id=f"T-{self.seq:03d}", requirement=requirement, wf_id=wf["id"],
             wf_index=WORKFLOWS.index(wf), name=wf["names"][0], channel=wf["ch"], path=list(wf["path"]),
+            ai_video=ai_video,
         )
         self.tasks[rec.id] = rec
         self.publish("task_created", {"id": rec.id, "wf": rec.wf_index, "wfId": rec.wf_id, "name": rec.name, "channel": rec.channel})
@@ -114,6 +116,7 @@ class Harness:
                 "task_id": rec.id, "requirement": rec.requirement, "wf_id": rec.wf_id,
                 "name": rec.name, "channel": rec.channel, "path": rec.path,
                 "stage": 0, "briefs": [], "sections": [], "revision": 0, "revision_notes": [], "package": {},
+                "ai_video": rec.ai_video,
                 "dims": [], "final_score": 0, "rejected": False,
                 "artifacts": [], "usage": [],
                 "verdict": {}, "rework": 0, "version": 1, "born": rec.born, "done": False,

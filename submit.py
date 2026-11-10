@@ -22,11 +22,12 @@ def main() -> int:
     ap.add_argument("requirement", help="需求文本")
     ap.add_argument("--wf", default=None, help="指定工作流模板，如 W01..W11")
     ap.add_argument("--num", type=int, default=1, help="提交数量（默认 1）")
+    ap.add_argument("--ai-video", action="store_true", help="额外生成 MiniMax AI 视频（较慢且消耗 RunningHub 额度）")
     args = ap.parse_args()
 
     for i in range(args.num):
         try:
-            resp = post("/api/tasks", {"requirement": args.requirement, "wf": args.wf})
+            resp = post("/api/tasks", {"requirement": args.requirement, "wf": args.wf, "ai_video": args.ai_video})
         except Exception as e:
             print(f"提交失败：{e}（先启动服务：uv run uvicorn app.main:app --port 8000）")
             return 1

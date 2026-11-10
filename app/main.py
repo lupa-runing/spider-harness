@@ -33,6 +33,7 @@ app.mount("/outputs", StaticFiles(directory=str(tools.WORKSPACE)), name="outputs
 class SubmitBody(BaseModel):
     requirement: str
     wf: str | None = None
+    ai_video: bool = False
 
 
 @app.get("/api/workflows")
@@ -47,8 +48,8 @@ async def submit(body: SubmitBody):
         raise HTTPException(400, "requirement 不能为空")
     if len(requirement) > 2000:
         raise HTTPException(400, "requirement 过长")
-    rec = harness.submit(requirement, body.wf)
-    return {"id": rec.id, "wf": rec.wf_id, "name": rec.name}
+    rec = harness.submit(requirement, body.wf, ai_video=body.ai_video)
+    return {"id": rec.id, "wf": rec.wf_id, "name": rec.name, "aiVideo": rec.ai_video}
 
 
 @app.get("/api/state")
