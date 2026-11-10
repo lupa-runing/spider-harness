@@ -10437,7 +10437,8 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
         fetch('/api/history').then(r => r.json()).catch(() => ({history: []}))]);
       const mem = m.tasks || [];
       const rows = [...mem, ...(h.history || []).filter(x => !mem.some(t => t.id === x.id))
-        .map(x => ({...x, status: 'hist', wf: '', born: x.mtime}))].reverse();
+        .map(x => ({...x, status: 'hist', wf: '', born: x.mtime}))]
+        .sort((a, b) => (b.born || b.mtime || 0) - (a.born || a.mtime || 0));
       el.list.innerHTML = rows.length ? rows.map(rowHTML).join('')
         : '还没有任务——点「＋ 提需求」提交一个需求，审读过线后内容包会出现在这里。';
       el.list.querySelectorAll('[data-id]').forEach(n => n.addEventListener('click', () => openDetail(n.dataset.id)));

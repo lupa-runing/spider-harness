@@ -16,10 +16,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import time
 from dataclasses import dataclass, field
 
 from .config import settings
+from . import tools
 from .graph import graph
 from .roles import AGENTS, PROOF, WF_BY_ID, WORKFLOWS
 
@@ -52,9 +54,29 @@ class TaskRecord:
 
 
 class Harness:
+    def _next_seq(self) -> int:
+        """任务序号跨重启单调递增：持久化计数 + 扫描 outputs/ 现有目录兜底，
+        避免重启后新任务复用旧 ID（T-001 撞车覆盖历史包）。"""
+        n = 0
+        try:
+            f = tools.WORKSPACE / ".seq.json"
+            if f.exists():
+                n = int(json.loads(f.read_text(encoding="utf-8")).get("seq", 0))
+        except (OSError, ValueError):
+            pass
+        if tools.WORKSPACE.is_dir():
+            for d in tools.WORKSPACE.iterdir():
+                if d.is_dir() and d.name.startswith("T-"):
+                    try:
+                        n = max(n, int(d.name[2:]))
+                    except ValueError:
+                        pass
+        return n
+
     def __init__(self) -> None:
+        tools.WORKSPACE.mkdir(parents=True, exist_ok=True)
         self.tasks: dict[str, TaskRecord] = {}
-        self.seq = 0
+        self.seq = self._next_seq()
         self.sem = asyncio.Semaphore(settings.max_concurrent_tasks)
         self.subs: set[asyncio.Queue] = set()
         self.counters = {
@@ -89,6 +111,10 @@ class Harness:
     # ---------------- 提交任务 ----------------
     def submit(self, requirement: str, wf_id: str | None = None, ai_video: bool = False) -> TaskRecord:
         self.seq += 1
+        try:   # 序号持久化：重启后不再复用旧 ID
+            (tools.WORKSPACE / ".seq.json").write_text(json.dumps({"seq": self.seq}), encoding="utf-8")
+        except OSError:
+            pass
         wf = WF_BY_ID[wf_id] if wf_id in WF_BY_ID else None
         if wf is None:
             wf = self._pick_wf(requirement)
