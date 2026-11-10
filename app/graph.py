@@ -21,7 +21,7 @@ from langgraph.types import Command
 from .provider import LLMResult, ROLE_TOKEN_BUDGET, Usage, complete
 from .config import settings
 from . import tools
-from .imagelib import generate as liblib_gen
+from .imagegen import generate as image_gen, configured as image_configured
 from .roles import (AGENTS, AGENT_WORDS, AXES, CHECK_NAMES, KEY_OF, PASS_SCORE, PROOF,
                     PROOF_JSON_INSTRUCTION, ROLE_PROMPTS, VAGUE, WORKER_INDICES, WORKFLOWS,
                     XHS_JSON_INSTRUCTIONS)
@@ -385,13 +385,12 @@ async def _xhs_build(key: str, state: dict, result: LLMResult, writer) -> tuple[
         async def gen_one(idx: int, prompt_en: str, cap: str) -> str:
             out = tools.task_dir(tid) / f"配图_{idx}.jpg"
             img, raw = None, tools.task_dir(tid) / f"_rawc{idx}.jpg"
-            if settings.liblib_access_key and settings.liblib_secret_key:
+            if image_configured():
                 try:
                     await asyncio.sleep(idx * 1.3)          # 提交 QPS 1，错峰
-                    img = await liblib_gen(prompt_en[:2000], raw, settings.liblib_access_key,
-                                           settings.liblib_secret_key, w=1080, h=1440)
+                    img = await image_gen(prompt_en[:2000], raw, w=1080, h=1440)
                 except Exception as e:
-                    print(f"[liblib] 配图{idx} 失败: {str(e)[:120]}")
+                    print(f"[image] 配图{idx} 失败: {str(e)[:120]}")
             if img is not None:
                 ai_flags[idx] = True
                 tools.overlay_card(img, out, cap, [], w=1080, h=1440, accent=accent)
@@ -402,15 +401,15 @@ async def _xhs_build(key: str, state: dict, result: LLMResult, writer) -> tuple[
             return tools.rel(out)
 
         cover, used_ai = None, False
-        if settings.liblib_access_key and settings.liblib_secret_key:
+        if image_configured():
             try:
                 if writer:
                     writer({"say": {"agent": 4, "text": f"调用 LiblibAI 生成封面 + {n_extra} 张配图…"}})
                 raw = tools.task_dir(tid) / "_cover_raw.jpg"
-                cover = await liblib_gen(ip, raw, settings.liblib_access_key, settings.liblib_secret_key, w=1080, h=1440)
+                cover = await image_gen(ip, raw, w=1080, h=1440)
                 used_ai = True
             except Exception as e:
-                print(f"[liblib] 封面失败: {str(e)[:120]}")
+                print(f"[image] 封面失败: {str(e)[:120]}")
                 cover = None
         out_cover = tools.task_dir(tid) / "封面_3x4.jpg"
         if cover is not None:
@@ -473,7 +472,7 @@ async def _xhs_build(key: str, state: dict, result: LLMResult, writer) -> tuple[
             raw = tools.task_dir(tid) / f"_raw{i}.jpg"
             if ip and settings.liblib_access_key and settings.liblib_secret_key:
                 try:
-                    img = await liblib_gen(ip, raw, settings.liblib_access_key, settings.liblib_secret_key, w=1080, h=1920)
+                    img = await image_gen(ip, raw, w=1080, h=1920)
                     ai_n += 1
                 except Exception:
                     img = None

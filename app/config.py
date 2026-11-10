@@ -10,7 +10,8 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = "deepseek-chat"
 
-    # LiblibAI 图像生成（星流 Star-3 Alpha）；两者都有值才启用，否则回退 PIL 文字卡
+    # 图像生成：RunningHub（Bearer key，中文 prompt）优先，LiblibAI（AK/SK）兜底；都空则回退 PIL 文字卡
+    runninghub_api_key: str = ""
     liblib_access_key: str = ""
     liblib_secret_key: str = ""
 
