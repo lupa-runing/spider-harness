@@ -142,8 +142,16 @@ def overlay_card(bg: Path, out: Path, title: str, lines: list[str], w: int, h: i
 async def tts(text: str, out: Path, voice: str = "zh-CN-XiaoxiaoNeural") -> Path:
     import edge_tts
     out.parent.mkdir(parents=True, exist_ok=True)
-    await edge_tts.Communicate(text, voice, rate="+8%").save(str(out))
-    return out
+    last = None
+    for attempt in range(3):                       # 网络抖动重试
+        try:
+            await edge_tts.Communicate(text, voice, rate="+8%").save(str(out))
+            if out.exists() and out.stat().st_size > 0:
+                return out
+        except Exception as e:
+            last = e
+        await asyncio.sleep(1.5 * (attempt + 1))
+    raise RuntimeError(f"tts 失败: {last}")
 
 
 def audio_dur(path: Path) -> float:
@@ -162,7 +170,16 @@ async def render_video(task_id: str, segments: list[dict], out_name: str = "vide
     clips, srt, t0 = [], [], 0.0
     for i, seg in enumerate(segments):
         seg_out = d / f"_seg{i}.mp4"
-        dur = audio_dur(seg["audio"])
+        audio = Path(seg["audio"])
+        if not audio.exists() or audio.stat().st_size == 0:
+            # 配音缺失兜底：按文本长度生成静音音轨，段时长仍成立
+            est = max(2.0, len(seg.get("text", "")) / 4.5)
+            silent = d / f"_sil{i}.mp3"
+            await asyncio.to_thread(subprocess.run, [
+                "ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi",
+                "-i", "anullsrc=r=24000:cl=mono", "-t", f"{est:.2f}", str(silent)], capture_output=True)
+            audio = silent
+        dur = audio_dur(audio)
         await asyncio.to_thread(subprocess.run, [
             "ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-i", str(seg["img"]),
             "-i", str(seg["audio"]), "-c:v", "libx264", "-tune", "stillimage", "-r", "30",

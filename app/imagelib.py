@@ -45,12 +45,20 @@ async def generate(prompt_en: str, out: Path, ak: str, sk: str,
             "generateParams": {"prompt": prompt_en[:2000], "imgCount": 1, "steps": 30,
                                "imageSize": {"width": max(512, min(2048, w)), "height": max(512, min(2048, h))}}}
     async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.post(BASE + uri, params=_auth_params(uri, ak, sk), json=body)
-        r.raise_for_status()
-        j = r.json()
-        if j.get("code") != 0:
-            raise RuntimeError(f"liblib submit: {j.get('msg')}")
-        gen_uuid = j["data"]["generateUuid"]
+        gen_uuid = None
+        for attempt in range(3):                   # 提交重试（QPS 限制 / 网络抖动）
+            try:
+                r = await client.post(BASE + uri, params=_auth_params(uri, ak, sk), json=body)
+                r.raise_for_status()
+                j = r.json()
+                if j.get("code") != 0:
+                    raise RuntimeError(f"liblib submit: {j.get('msg')}")
+                gen_uuid = j["data"]["generateUuid"]
+                break
+            except (httpx.HTTPStatusError, httpx.TransportError) as e:
+                if attempt == 2:
+                    raise
+                await asyncio.sleep(1.5 * (attempt + 1))
 
         quri = "/api/generate/webui/status"
         deadline = time.time() + max_wait

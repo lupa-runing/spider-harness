@@ -21,6 +21,7 @@ from langgraph.types import Command
 from .provider import LLMResult, ROLE_TOKEN_BUDGET, Usage, complete
 from .config import settings
 from . import tools
+from .imagelib import generate as liblib_gen
 from .roles import (AGENTS, AGENT_WORDS, AXES, CHECK_NAMES, KEY_OF, PASS_SCORE, PROOF,
                     PROOF_JSON_INSTRUCTION, ROLE_PROMPTS, VAGUE, WORKER_INDICES, WORKFLOWS,
                     XHS_JSON_INSTRUCTIONS)
@@ -160,6 +161,8 @@ def make_role_node(agent_idx: int):
         brief = (state["briefs"] or [""] * len(path))[stage] if stage < len(state["briefs"] or []) else ""
         upstream = state["artifacts"][-1] if state["artifacts"] else "（无上游产物）"
         system = ROLE_PROMPTS[key]
+        if state.get("wf_id") == "W12" and key in XHS_JSON_INSTRUCTIONS:
+            system = f"{system} {XHS_JSON_INSTRUCTIONS[key]}"   # 注入结构化产出指令（JSON/英文 imagePrompt）
         prompt = f"任务：{state['name']}（{state['requirement']}）\n本站任务书：{brief}\n上游产物摘要：{upstream[:600]}"
 
         if writer:
@@ -368,13 +371,29 @@ async def _xhs_build(key: str, state: dict, result: LLMResult, writer) -> tuple[
             accent = tuple(int(c) for c in (data.get("accent") or accent))
         except (TypeError, ValueError):
             pass
-        cover = tools.text_card(tools.task_dir(tid) / "封面_3x4.jpg", title, lines[:3],
-                                w=1080, h=1440, accent=accent, badge=badge)
-        pkg.update({"cover": tools.rel(cover), "accent": list(accent)})
+        cover, used_ai = None, False
+        ip = str(data.get("imagePrompt") or "").strip() or \
+            f"xiaohongshu cover style product photography of {state['requirement'][:60]}, bright aesthetic, soft daylight, clean composition, no text"
+        if settings.liblib_access_key and settings.liblib_secret_key:
+            try:
+                if writer:
+                    writer({"say": {"agent": 4, "text": "调用 LiblibAI 生成封面…"}})
+                raw = tools.task_dir(tid) / "_cover_raw.jpg"
+                cover = await liblib_gen(ip, raw, settings.liblib_access_key, settings.liblib_secret_key, w=1080, h=1440)
+                used_ai = True
+            except Exception:
+                cover = None
+        out_cover = tools.task_dir(tid) / "封面_3x4.jpg"
+        if cover is not None:
+            tools.overlay_card(cover, out_cover, title, lines[:3], w=1080, h=1440, accent=accent, badge=badge)
+            raw.unlink(missing_ok=True)
+        else:
+            tools.text_card(out_cover, title, lines[:3], w=1080, h=1440, accent=accent, badge=badge)
+        pkg.update({"cover": tools.rel(out_cover), "accent": list(accent)})
         if writer:
             writer({"say": {"agent": 4, "text": "封面已出 · " + title}})
             _emit_files(writer, tid, [pkg["cover"]])
-        return pkg, f"[DESIGN] 封面 {pkg['cover']} 已生成（主色 {accent}）"
+        return pkg, f"[DESIGN] 封面 {pkg['cover']} 已生成（{'AI 图' if used_ai else '文字卡'}，主色 {accent}）"
 
     if key == "CUT":
         if writer:
@@ -387,21 +406,34 @@ async def _xhs_build(key: str, state: dict, result: LLMResult, writer) -> tuple[
             segs = (segs + [{"say": s[:60], "os": s[:12]} for s in sents])[:6]
         segs = segs[:6] or [{"say": pkg.get("hook", state["requirement"][:30]), "os": state["name"][:12]}]
         acc = tuple(pkg.get("accent") or accent)
-        parts = []
+        parts, ai_n = [], 0
         for i, sg in enumerate(segs):
             say = str(sg.get("say") or "")[:80] or f"第{i + 1}段"
             os_t = str(sg.get("os") or "")[:14] or f"{i + 1}"
             lines = [str(x)[:18] for x in (sg.get("lines") or [])][:2]
-            img = tools.text_card(tools.task_dir(tid) / f"_f{i}.jpg", os_t, lines,
-                                  w=1080, h=1920, accent=acc, badge=f"{i + 1}/{len(segs)}")
+            ip = str(sg.get("imgPrompt") or "").strip()
+            img = None
+            raw = tools.task_dir(tid) / f"_raw{i}.jpg"
+            if ip and settings.liblib_access_key and settings.liblib_secret_key:
+                try:
+                    img = await liblib_gen(ip, raw, settings.liblib_access_key, settings.liblib_secret_key, w=1080, h=1920)
+                    ai_n += 1
+                except Exception:
+                    img = None
+            frame_out = tools.task_dir(tid) / f"_f{i}.jpg"
+            if img is not None:
+                tools.overlay_card(img, frame_out, os_t, lines, w=1080, h=1920, accent=acc, badge=f"{i + 1}/{len(segs)}")
+            else:
+                tools.text_card(frame_out, os_t, lines, w=1080, h=1920, accent=acc, badge=f"{i + 1}/{len(segs)}")
+            raw.unlink(missing_ok=True)
             audio = await tools.tts(say, tools.task_dir(tid) / f"_a{i}.mp3")
-            parts.append({"img": img, "audio": audio, "text": say})
+            parts.append({"img": frame_out, "audio": audio, "text": say})
         rendered = await tools.render_video(tid, parts)
         pkg.update({"video": rendered["video"], "srt": rendered["srt"], "dur": rendered["dur"]})
         if writer:
             writer({"say": {"agent": 9, "text": f"成片合成 · {rendered['dur']} 秒"}})
             _emit_files(writer, tid, [rendered["video"], rendered["srt"]])
-        return pkg, f"[CUT] video.mp4 已合成（{len(parts)} 段 · {rendered['dur']} 秒）+ 字幕.srt"
+        return pkg, f"[CUT] video.mp4 已合成（{len(parts)} 段 · {rendered['dur']} 秒，AI 图 {ai_n}/{len(parts)}）+ 字幕.srt"
 
     if key == "PROOF":
         title, body, tags = pkg.get("title", ""), pkg.get("body", ""), pkg.get("tags", [])
