@@ -10308,7 +10308,7 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
   ta.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') submit(); });
 }
 
-/* ---------- 任务中心：历史任务列表 + 结果详情（视频/图片预览、文案全文复制） ---------- */
+/* ---------- 任务中心：顶部工具栏，下方任务列表与结果预览 ---------- */
 {
   const tcTools = SR.querySelector('.tools');
   const btnR = document.createElement('button');
@@ -10320,18 +10320,25 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
   mask.className = 'req-mask'; mask.hidden = true;
   mask.innerHTML = `
     <div class="req-box tc-box" role="dialog" aria-label="任务中心">
-      <div class="tc-head">
-        <button class="req-x tc-back" type="button" hidden>← 列表</button>
-        <b class="tc-title">任务中心</b>
-        <i class="rep-meta tc-meta"></i>
-        <button class="req-x tc-close" type="button">✕</button>
-      </div>
+      <header class="tc-head">
+        <h2 class="tc-title">任务中心</h2>
+        <div class="tc-meta">选择任务查看结果</div>
+        <div class="tc-actions">
+          <button class="req-x tc-refresh" type="button">刷新</button>
+          <button class="req-x tc-close" type="button" aria-label="关闭任务中心">✕</button>
+        </div>
+      </header>
       <div class="tc-body">
-        <div class="tc-list"></div>
-        <div class="tc-detail" hidden></div>
+        <section class="tc-pane tc-tasks" aria-label="任务列表">
+          <h3 class="tc-pane-title">任务列表 <span class="tc-count"></span></h3>
+          <div class="tc-list"></div>
+          <div class="tc-list-error" role="status" hidden></div>
+        </section>
+        <section class="tc-pane" aria-label="结果预览">
+          <h3 class="tc-pane-title">结果预览</h3>
+          <div class="tc-detail"></div>
+        </section>
       </div>
-      <div class="req-row req-acts"><span class="req-hint tc-note"></span>
-        <button class="req-x tc-refresh" type="button">刷新</button></div>
     </div>`;
   SR.appendChild(mask);
   const lb = document.createElement('div');
@@ -10340,42 +10347,58 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
   SR.appendChild(lb);
   const stEl2 = document.createElement('style');
   stEl2.textContent = `
-    .tc-box{width:min(860px,94vw);max-height:88vh;display:flex;flex-direction:column}
-    .tc-head{display:flex;align-items:center;gap:10px;padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid rgba(120,170,255,.25)}
-    .tc-title{font:700 14px/1 var(--mono);letter-spacing:.18em;color:#bfe2ff;flex:none}
-    .tc-meta{flex:1;font-style:normal;color:#8fd4ff !important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .tc-back{flex:none}
-    .tc-body{overflow:auto;font:400 12.5px/1.7 var(--cjk);color:#cfe0f8;min-height:220px;padding-right:6px}
-    .tc-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid rgba(120,170,255,.16);border-radius:4px;margin-bottom:8px;cursor:pointer;background:rgba(10,16,32,.5)}
+    .tc-box{width:min(1220px,96vw);height:min(860px,90dvh);display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;font:400 12.5px/1.7 var(--cjk);color:#cfe0f8}
+    .tc-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid rgba(120,170,255,.25)}
+    .tc-title{margin:0;font:700 16px/1 var(--cjk);color:#bfe2ff;white-space:nowrap}
+    .tc-meta{color:#8fd4ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .tc-actions{display:flex;gap:6px}
+    .tc-body{display:grid;grid-template-columns:clamp(230px,30%,320px) minmax(0,1fr);gap:14px;min-height:0}
+    .tc-pane{display:flex;flex-direction:column;min-width:0;min-height:0}
+    .tc-tasks{border-right:1px solid rgba(120,170,255,.2);padding-right:12px}
+    .tc-pane-title{margin:0 0 8px;font:700 12px/1.6 var(--cjk);color:#bfe2ff}
+    .tc-count{margin-left:4px;color:#94a9cb;font-weight:400}
+    .tc-list,.tc-detail{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-right:4px}
+    .tc-list-error{color:#ff9eb0;padding-top:4px}
+    .tc-empty{color:#7f93b8;padding:30px 10px;text-align:center}
+    .tc-row{display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border:1px solid rgba(120,170,255,.16);border-radius:4px;margin-bottom:8px;cursor:pointer;background:rgba(10,16,32,.5);font:inherit;text-align:left}
     .tc-row:hover{border-color:#8fd4ff;background:rgba(16,26,52,.7)}
-    .tc-row b{display:block;font-size:13px;color:#e8f1ff}
-    .tc-row span{font-size:11px;color:#7f93b8}
-    .tc-row-l{min-width:0;overflow:hidden}
+    .tc-row[aria-pressed="true"]{border-color:#ffd27a;background:rgba(255,210,122,.09)}
+    .tc-row-name,.tc-row-info{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .tc-row-name{color:#e8f1ff}
+    .tc-row-info,.tc-files{font-size:10.5px;color:#94a9cb}
+    .tc-row-l{min-width:0;flex:1}
     .tc-row-r{text-align:right;flex:none}
-    .tc-score{color:#ffd27a;font-weight:700}
-    .tc-dim{margin-left:8px}
-    .tc-badge{display:inline-block;padding:2px 8px;border-radius:3px;font:700 10.5px/1.6 var(--cjk);margin-left:8px}
+    .tc-score{color:#ffd27a;font-weight:700;margin-left:5px}
+    .tc-files{display:block}
+    .tc-badge{display:inline-block;padding:2px 7px;border-radius:3px;font:700 10px/1.6 var(--cjk)}
     .tc-badge.ok{color:#0a2015;background:#7fe6b0}.tc-badge.run{color:#082038;background:#7fd4ff}
     .tc-badge.rev{color:#33260a;background:#ffd27a}.tc-badge.no{color:#2a0a12;background:#ff9eb0}
     .tc-badge.err{color:#2a0a12;background:#ff8f8f}.tc-badge.his{color:#cfe0f8;background:rgba(120,170,255,.25)}
     .tc-sec{margin-bottom:16px}
     .tc-sec-t{font:700 11px/1 var(--mono);letter-spacing:.16em;color:#bfe2ff;margin-bottom:8px;border-bottom:1px solid rgba(120,170,255,.25);padding-bottom:5px}
-    .tc-video{width:100%;max-height:420px;border-radius:4px;background:#000;display:block}
+    .tc-video{width:100%;max-height:400px;border-radius:4px;background:#000;display:block}
     .tc-gal{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
-    .tc-img{width:132px;height:176px;object-fit:cover;border-radius:4px;cursor:zoom-in;border:1px solid rgba(120,170,255,.3)}
-    .tc-img.first{width:168px;height:224px;border-color:#ffd27a}
-    .tc-copy{position:relative;border:1px solid rgba(120,170,255,.28);border-radius:4px;padding:12px 14px;background:rgba(4,8,18,.6)}
-    .tc-copy-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-    .tc-copy-t{font:700 15px/1.4 var(--cjk);color:#ffe9f2}
+    .tc-img{flex:none;width:118px;height:157px;object-fit:cover;border-radius:4px;cursor:zoom-in;border:1px solid rgba(120,170,255,.3)}
+    .tc-img.first{width:150px;height:200px;border-color:#ffd27a}
+    .tc-copy{border:1px solid rgba(120,170,255,.28);border-radius:4px;padding:12px 14px;background:rgba(4,8,18,.6)}
+    .tc-copy-h{display:flex;align-items:center;flex-wrap:wrap;justify-content:space-between;margin-bottom:6px;gap:8px}
+    .tc-copy-t{font:700 15px/1.4 var(--cjk);color:#ffe9f2;overflow-wrap:anywhere}
     .tc-copy-b{white-space:pre-wrap;word-break:break-word;color:#dfe9f8}
     .tc-tags{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
     .tc-tags i{font-style:normal;font-size:11px;color:#8fd4ff;background:rgba(90,160,255,.14);border-radius:3px;padding:2px 7px}
-    .tc-btn{font:700 11px/1 var(--cjk);color:#0a0710;background:linear-gradient(90deg,#ffb48f,#ff6fae);border:none;border-radius:3px;padding:6px 12px;cursor:pointer}
-    .tc-btn.ghost{color:#9fb4d8;background:rgba(8,14,28,.8);border:1px solid rgba(120,170,255,.25)}
+    .tc-btn{font:700 11px/1 var(--cjk);color:#0a0710;background:linear-gradient(90deg,#ffb48f,#ff6fae);border:none;border-radius:3px;padding:6px 12px;cursor:pointer;flex:none}
     .tc-md{white-space:pre-wrap;word-break:break-word}
     .tc-lb{z-index:80;align-items:center;justify-content:center}
     .tc-lb img{max-width:92vw;max-height:88vh;border-radius:4px;box-shadow:0 30px 80px rgba(0,0,0,.7)}
-    .rep-meta{color:#8fd4ff !important;font-style:normal}
+    @media (max-width:640px){
+      .tc-box{padding:10px}
+      .tc-head{grid-template-columns:minmax(0,1fr) auto;gap:6px}
+      .tc-meta{grid-row:2;grid-column:1/-1}
+      .tc-body{grid-template-columns:minmax(0,36%) minmax(0,1fr);gap:8px}
+      .tc-tasks{padding-right:5px}
+      .tc-row{flex-direction:column;align-items:stretch;gap:3px;padding:6px}
+      .tc-row-r{text-align:left}
+    }
     .rep-line{margin:3px 0;white-space:pre-wrap;word-break:break-word}
     .rep-line b{color:#ffd27a;font-weight:600}
     .rep-dim{display:flex;align-items:center;gap:8px;margin:4px 0}
@@ -10396,15 +10419,15 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
   SR.appendChild(stEl2);
 
   const q = s => mask.querySelector(s);
-  const el = {list: q('.tc-list'), detail: q('.tc-detail'), title: q('.tc-title'), meta: q('.tc-meta'),
-              back: q('.tc-back'), note: q('.tc-note'), refresh: q('.tc-refresh'), close: q('.tc-close')};
+  const el = {list: q('.tc-list'), detail: q('.tc-detail'), count: q('.tc-count'),
+              meta: q('.tc-meta'), error: q('.tc-list-error'), refresh: q('.tc-refresh'), close: q('.tc-close')};
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const md2html = md => esc(md).split('\n').map(l => {
     if (/^###\s/.test(l)) return `<div class="md-h3">${l.slice(4)}</div>`;
     if (/^##\s/.test(l)) return `<div class="md-h2">${l.slice(3)}</div>`;
     if (/^#\s/.test(l)) return `<div class="md-h1">${l.slice(2)}</div>`;
     if (/^---*$/.test(l.trim())) return '<hr>';
-    if (/^>\s?/.test(l)) return `<div class="md-q">${l.replace(/^>\s?/, '')}</div>`;
+    if (/^&gt;\s?/.test(l)) return `<div class="md-q">${l.replace(/^&gt;\s?/, '')}</div>`;
     if (/^[-*]\s/.test(l)) return `<div class="md-li">· ${l.slice(2)}</div>`;
     if (/^\d+\.\s/.test(l)) return `<div class="md-li">${l}</div>`;
     return l ? `<div class="md-p">${l}</div>` : '<div class="md-gap"></div>';
@@ -10417,74 +10440,116 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
     if (st === 'done') return `<span class="tc-badge ok">已交付</span>`;
     if (st === 'rejected') return `<span class="tc-badge no">未过线</span>`;
     if (st === 'failed') return `<span class="tc-badge err">异常</span>`;
-    if (st === 'running') return final ? `<span class="tc-badge run">已派单·执行中</span>` : `<span class="tc-badge rev">评审中</span>`;
+    if (st === 'running') return final ? `<span class="tc-badge run">执行中</span>` : `<span class="tc-badge rev">评审中</span>`;
     return `<span class="tc-badge his">历史包</span>`;
   };
   const lightbox = src => { lb.querySelector('img').src = src; lb.hidden = false; };
   lb.addEventListener('click', () => { lb.hidden = true; });
 
-  /* ---- 列表 ---- */
+  /* ---- 左栏：任务列表 ---- */
+  let rows = [], listHTML = '', curId = '', timer, listRequest, detailRequest;
+  const emptyPreview = '<div class="tc-empty">选择任务后可预览视频、图片和文案</div>';
+  const getJSON = async (url, signal) => {
+    const response = await fetch(url, {signal});
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    return response.json();
+  };
   const rowHTML = t => `
-    <div class="tc-row" data-id="${esc(t.id)}">
-      <div class="tc-row-l"><b>${esc(t.name || t.id)}</b>
-        <span>${esc(t.id)} · ${esc(t.wf || '')}${t.born || t.mtime ? ' · ' + fmtT(t.born || t.mtime) : ''}</span></div>
-      <div class="tc-row-r">${badge(t.status, t.final)}${t.final ? `<b class="tc-score tc-dim">${t.final} 分</b>` : ''}${t.files ? `<span class="tc-dim">${t.files} 文件</span>` : ''}</div>
-    </div>`;
-  const loadList = async () => {
+    <button class="tc-row" type="button" data-id="${esc(t.id)}" aria-pressed="false">
+      <span class="tc-row-l"><b class="tc-row-name" title="${esc(t.name || t.id)}">${esc(t.name || t.id)}</b>
+        <span class="tc-row-info">${esc([t.id, t.wf, fmtT(t.born || t.mtime)].filter(Boolean).join(' · '))}</span></span>
+      <span class="tc-row-r">${badge(t.status, t.final)}${t.final ? `<b class="tc-score">${esc(t.final)} 分</b>` : ''}
+        <span class="tc-files">${esc(t.files || 0)} 个文件</span></span>
+    </button>`;
+  const showSelection = row => {
+    el.list.querySelectorAll('[data-id]').forEach(n => n.setAttribute('aria-pressed', n.dataset.id === curId));
+    el.meta.innerHTML = row
+      ? `${esc(row.name || row.id)} · ${badge(row.status, row.final)}${row.final ? `<b class="tc-score">${esc(row.final)} 分</b>` : ''}`
+      : '选择任务查看结果';
+  };
+  const loadList = async (refreshDetail = false) => {
+    if (mask.hidden || (listRequest && !refreshDetail)) return;
+    listRequest?.abort();
+    const request = listRequest = new AbortController();
     try {
       const [m, h] = await Promise.all([
-        fetch('/api/tasks').then(r => r.json()).catch(() => ({tasks: []})),
-        fetch('/api/history').then(r => r.json()).catch(() => ({history: []}))]);
+        getJSON('/api/tasks', request.signal),
+        getJSON('/api/history', request.signal)]);
+      if (request.signal.aborted) return;
       const mem = m.tasks || [];
-      const rows = [...mem, ...(h.history || []).filter(x => !mem.some(t => t.id === x.id))
+      rows = [...mem, ...(h.history || []).filter(x => !mem.some(t => t.id === x.id))
         .map(x => ({...x, status: 'hist', wf: '', born: x.mtime}))]
         .sort((a, b) => (b.born || b.mtime || 0) - (a.born || a.mtime || 0));
-      el.list.innerHTML = rows.length ? rows.map(rowHTML).join('')
-        : '还没有任务——点「＋ 提需求」提交一个需求，审读过线后内容包会出现在这里。';
-      el.list.querySelectorAll('[data-id]').forEach(n => n.addEventListener('click', () => openDetail(n.dataset.id)));
-      if (!rows.length) return;
-    } catch (e) { el.list.innerHTML = '加载失败：' + esc(e.message); }
+      const html = rows.length ? rows.map(rowHTML).join('')
+        : '<div class="tc-empty">还没有任务<br>点顶部「＋ 提需求」提交</div>';
+      if (html !== listHTML) {
+        const focusedId = el.list.contains(SR.activeElement) ? SR.activeElement.dataset.id : '';
+        el.list.innerHTML = listHTML = html;
+        if (focusedId) [...el.list.querySelectorAll('[data-id]')]
+          .find(n => n.dataset.id === focusedId)?.focus({preventScroll: true});
+      }
+      el.count.textContent = rows.length;
+      el.error.hidden = true;
+      const selected = rows.find(r => r.id === curId) || rows[0];
+      if (!selected) {
+        detailRequest?.abort();
+        curId = '';
+        showSelection();
+        el.detail.innerHTML = emptyPreview;
+      } else if (selected.id !== curId || refreshDetail) {
+        openDetail(selected);
+      } else {
+        showSelection(selected);
+      }
+    } catch (e) {
+      if (request.signal.aborted) return;
+      if (!listHTML) el.list.textContent = '';
+      el.error.textContent = '任务列表加载失败（' + e.message + '）';
+      el.error.hidden = false;
+    } finally {
+      if (listRequest === request) listRequest = null;
+    }
   };
 
-  /* ---- 详情 ---- */
+  /* ---- 右栏：结果预览 ---- */
   const parseCopy = d => {
     if (d.pkg && (d.pkg.title || d.pkg.body)) return d.pkg;
     const md = d.copy_md || '';
     if (!md) return null;
-    const lines = md.split('\n');
-    const title = (lines.find(l => l.startsWith('# ')) || '').slice(2).trim();
-    const tagIdx = lines.findIndex((l, i) => i > 0 && /^#[^\s#]/.test(l.trim()) && l.trim().includes('#'));
-    const body = lines.slice(1, tagIdx > 0 ? tagIdx : lines.length).join('\n').trim();
-    const tags = tagIdx > 0 ? lines[tagIdx].trim().split(/\s+/).filter(x => x.startsWith('#')) : [];
+    const lines = md.trim().split(/\r?\n/);
+    const title = lines[0].startsWith('# ') ? lines.shift().slice(2).trim() : '';
+    const tagIdx = lines.findIndex(l => /^(#[^\s#]+)(\s+#[^\s#]+)*$/.test(l.trim()));
+    const body = lines.slice(0, tagIdx < 0 ? lines.length : tagIdx).join('\n').trim();
+    const tags = tagIdx < 0 ? [] : lines[tagIdx].trim().split(/\s+/);
     return {title, body, tags};
   };
-  const detailHTML = d => {
+  const fileURL = path => '/' + path.split('/').map(encodeURIComponent).join('/');
+  const detailHTML = (d, cp) => {
     const files = d.files || [];
-    const video = files.find(f => /\.mp4$/i.test(f)) || (d.pkg && d.pkg.video);
-    const cover = files.find(f => f.includes('封面')) || (d.pkg && d.pkg.cover);
-    const frames = (d.pkg && d.pkg.frames) || files.filter(f => /分镜/.test(f));
-    const gallery = (d.pkg && d.pkg.gallery) || files.filter(f => /配图/.test(f));
+    const video = d.pkg?.video || files.find(f => /\.mp4$/i.test(f));
+    const cover = d.pkg?.cover || files.find(f => f.includes('封面'));
+    const frames = d.pkg?.frames || files.filter(f => /分镜/.test(f));
+    const gallery = d.pkg?.gallery || files.filter(f => /配图/.test(f));
     const imgs = [...new Set([cover, ...gallery, ...frames].filter(Boolean))];
-    const cp = parseCopy(d);
     let h = '';
-    if (d.requirement) h += `<div class="tc-sec"><div class="tc-sec-t">需求原文</div><div class="tc-md">${esc(d.requirement)}</div></div>`;
-    if (video) h += `<div class="tc-sec"><div class="tc-sec-t">成片预览${d.pkg && d.pkg.dur ? ' · ' + d.pkg.dur + ' 秒' : ''}</div>
-      <video class="tc-video" controls preload="metadata" src="/${esc(video)}"></video></div>`;
+    if (d.status === 'running') h += `<div class="tc-sec tc-md" style="color:#ffd27a">${d.final ? '执行中，点击「刷新」查看已生成的产物。' : '需求评审中，点击「刷新」查看最新进度。'}</div>`;
+    if (video) h += `<div class="tc-sec"><div class="tc-sec-t">成片预览${d.pkg?.dur ? ' · ' + esc(d.pkg.dur) + ' 秒' : ''}</div>
+      <video class="tc-video" controls preload="metadata" src="${esc(fileURL(video))}"></video></div>`;
     if (cp && (cp.title || cp.body)) {
       h += `<div class="tc-sec"><div class="tc-sec-t">发布文案（复制即用）</div><div class="tc-copy">
         <div class="tc-copy-h"><b class="tc-copy-t">${esc(cp.title || '')}</b>
-          <button class="tc-btn" data-copy="${esc(Date.now())}">复制全文</button></div>
+          <button class="tc-btn" type="button" data-copy aria-live="polite">复制全文</button></div>
         <div class="tc-copy-b">${esc(cp.body || '')}</div>
         ${(cp.tags || []).length ? `<div class="tc-tags">${cp.tags.map(t => `<i>${esc(t)}</i>`).join('')}</div>` : ''}
       </div></div>`;
-      window.__tcCopyText = `${cp.title || ''}\n\n${cp.body || ''}\n\n${(cp.tags || []).join(' ')}`;
     }
     if (imgs.length) h += `<div class="tc-sec"><div class="tc-sec-t">图片（点击放大）</div><div class="tc-gal">` +
-      imgs.map((f, i) => `<img class="tc-img${i === 0 ? ' first' : ''}" loading="lazy" src="/${esc(f)}" data-full="/${esc(f)}" alt="图${i + 1}">`).join('') + `</div></div>`;
+      imgs.map((f, i) => `<img class="tc-img${i === 0 ? ' first' : ''}" loading="lazy" src="${esc(fileURL(f))}" alt="图${i + 1}">`).join('') + `</div></div>`;
+    if (d.requirement) h += `<div class="tc-sec"><div class="tc-sec-t">需求原文</div><div class="tc-md">${esc(d.requirement)}</div></div>`;
     if (d.dims && d.dims.length === 7) {
       const axes = ['完整', '可执行', '可度量', '负责人', '截止', '无歧义', '可验收'];
       h += `<div class="tc-sec"><div class="tc-sec-t">七维需求质量</div>` + d.dims.map((v, i) =>
-        `<div class="rep-dim"><em>${axes[i] || i}</em><u><s style="width:${clamp(v, 0, 100)}%"></s></u><b>${v}</b></div>`).join('') + `</div>`;
+        `<div class="rep-dim"><em>${axes[i] || i}</em><u><s style="width:${clamp(v, 0, 100)}%"></s></u><b>${esc(v)}</b></div>`).join('') + `</div>`;
     }
     const vagues = (d.sections || []).map(s => (s.words || []).filter(w => w.kind === 'vague')
       .map(w => `<div class="rep-line"><b>${esc(w.w)}</b> → ${esc(w.fix || '（未补齐）')}</div>`).join('')).join('');
@@ -10494,47 +10559,80 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
     if ((d.outputs || []).length) h += `<div class="tc-sec"><div class="tc-sec-t">执行产物（各工位产出）</div>` +
       d.outputs.map(o => `<div class="rep-line">${esc(o)}</div>`).join('') + `</div>`;
     if (d.pub_md) h += `<div class="tc-sec"><div class="tc-sec-t">发布说明</div><div class="tc-md">${md2html(d.pub_md)}</div></div>`;
-    if (d.status === 'running' && d.final) h += `<div class="tc-sec"><div class="tc-md" style="color:#ffd27a">⏳ 执行中：视频分镜与剩余产物生成后，点右上「刷新」即可看到更新。</div></div>`;
     if (files.length) h += `<div class="tc-sec"><div class="tc-sec-t">交付文件（点击打开/下载）</div>` +
-      files.map(f => `<div class="rep-line"><a href="/${esc(f)}" target="_blank" style="color:#8fd4ff">▾ ${esc(f.split('/').pop())}</a> <span style="color:#7f93b8">· ${esc(f)}</span></div>`).join('') + `</div>`;
-    return h || '暂无数据';
+      files.map(f => `<div class="rep-line"><a href="${esc(fileURL(f))}" target="_blank" rel="noopener" style="color:#8fd4ff">▾ ${esc(f.split('/').pop())}</a> <span style="color:#7f93b8">· ${esc(f)}</span></div>`).join('') + `</div>`;
+    return h || '<div class="tc-empty">暂无结果</div>';
   };
-  const openDetail = async id => {
-    el.list.hidden = true; el.detail.hidden = false; el.back.hidden = false;
-    el.title.textContent = '任务详情'; el.meta.textContent = id; el.note.textContent = '';
-    el.detail.innerHTML = '加载中…';
-    const d = await fetch(`/api/tasks/${id}/result`).then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
-      .catch(e => ({err: e.message}));
-    if (d.err) { el.detail.innerHTML = '加载失败：' + esc(d.err); return; }
-    const pass = d.final >= PASS;
-    el.meta.innerHTML = `${esc(d.status === 'done' ? '已交付' : d.status === 'rejected' ? '未过线' : d.status === 'running' ? (d.final ? '已派单·执行中' : '评审中') : d.status)}` +
-      (d.final ? ` · <b style="color:${pass ? '#7fe6b0' : '#ff9eb0'}">${d.final} 分</b>` : '');
-    el.detail.innerHTML = detailHTML(d);
-    const copyBtn = el.detail.querySelector('[data-copy]');
-    if (copyBtn) copyBtn.addEventListener('click', async () => {
-      const txt = window.__tcCopyText || '';
-      try { await navigator.clipboard.writeText(txt); el.note.textContent = '已复制到剪贴板 ✓'; }
-      catch (e) {
-        const t = document.createElement('textarea'); t.value = txt; SR.appendChild(t); t.select();
-        try { document.execCommand('copy'); el.note.textContent = '已复制 ✓'; } catch (e2) { el.note.textContent = '复制失败，请手动选择'; }
-        t.remove();
+  const openDetail = async row => {
+    detailRequest?.abort();
+    const request = detailRequest = new AbortController();
+    curId = row.id;
+    showSelection(row);
+    el.detail.innerHTML = '<div class="tc-empty">加载中…</div>';
+    try {
+      const d = await getJSON(`/api/tasks/${encodeURIComponent(row.id)}/result`, request.signal);
+      if (request.signal.aborted) return;
+      const cp = parseCopy(d);
+      el.detail.innerHTML = detailHTML(d, cp);
+      el.detail.scrollTop = 0;
+      const copyBtn = el.detail.querySelector('[data-copy]');
+      if (copyBtn) {
+        const txt = [cp.title, cp.body, (cp.tags || []).join(' ')].filter(Boolean).join('\n\n');
+        let resetCopy;
+        copyBtn.addEventListener('click', async () => {
+          let copied = false;
+          try {
+            await navigator.clipboard.writeText(txt);
+            copied = true;
+          } catch {
+            const field = document.createElement('textarea');
+            field.value = txt;
+            field.style.cssText = 'position:absolute;opacity:0;pointer-events:none';
+            q('.tc-box').appendChild(field);
+            field.select();
+            try { copied = document.execCommand('copy'); } catch { /* 保留手动复制提示 */ }
+            field.remove();
+            copyBtn.focus({preventScroll: true});
+          }
+          copyBtn.textContent = copied ? '已复制 ✓' : '复制失败，请手动选择';
+          clearTimeout(resetCopy);
+          resetCopy = setTimeout(() => { copyBtn.textContent = '复制全文'; }, 2000);
+        });
       }
-      setTimeout(() => { el.note.textContent = ''; }, 2000);
-    });
-    el.detail.querySelectorAll('img.tc-img').forEach(im => im.addEventListener('click', () => lightbox(im.dataset.full)));
+      el.detail.querySelectorAll('img.tc-img').forEach(im => im.addEventListener('click', () => lightbox(im.src)));
+    } catch (e) {
+      if (!request.signal.aborted) el.detail.innerHTML = `<div class="tc-empty">结果加载失败（${esc(e.message)}），请刷新重试。</div>`;
+    } finally {
+      if (detailRequest === request) detailRequest = null;
+    }
   };
 
-  /* ---- 视图切换 ---- */
-  const open = () => { mask.hidden = false; el.back.hidden = true; el.detail.hidden = true; el.list.hidden = false;
-    el.title.textContent = '任务中心'; el.meta.textContent = ''; loadList();
-    clearInterval(window.__tcTimer); window.__tcTimer = setInterval(() => { if (!el.list.hidden) loadList(); }, 4000); };
-  const close = () => { mask.hidden = true; clearInterval(window.__tcTimer); };
-  const back = () => { el.detail.hidden = true; el.list.hidden = false; el.back.hidden = true;
-    el.title.textContent = '任务中心'; el.meta.textContent = ''; clearInterval(window.__tcTimer);
-    window.__tcTimer = setInterval(() => { if (!el.list.hidden) loadList(); }, 4000); loadList(); };
+  /* ---- 打开 / 刷新 / 关闭 ---- */
+  const open = () => {
+    if (!mask.hidden) return;
+    mask.hidden = false;
+    if (!listHTML) el.list.innerHTML = '<div class="tc-empty">加载中…</div>';
+    if (!curId) el.detail.innerHTML = emptyPreview;
+    loadList(true);
+    timer = setInterval(loadList, 4000);
+    el.close.focus({preventScroll: true});
+  };
+  const close = () => {
+    mask.hidden = true;
+    lb.hidden = true;
+    clearInterval(timer);
+    listRequest?.abort();
+    detailRequest?.abort();
+    el.detail.querySelector('video')?.pause();
+    btnR.focus({preventScroll: true});
+  };
+  el.list.addEventListener('click', e => {
+    const button = e.target.closest('[data-id]');
+    const row = button && rows.find(r => r.id === button.dataset.id);
+    if (row) openDetail(row);
+  });
   btnR.addEventListener('click', open);
-  el.back.addEventListener('click', back);
-  el.refresh.addEventListener('click', () => { el.list.hidden ? openDetail(el.meta.textContent.split(' ·')[0]) : loadList(); });
+  el.refresh.addEventListener('click', () => loadList(true));
   el.close.addEventListener('click', close);
   mask.addEventListener('click', e => { if (e.target === mask) close(); });
   document.addEventListener('keydown', e => {           // capture：Esc 关最上层
