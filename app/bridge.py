@@ -43,6 +43,7 @@ class TaskRecord:
     status: str = "running"  # running | done | failed | rejected
     cycle: float = 0.0
     req: dict | None = None  # NEBULA 需求评审：{sections:[{ai,words:[...]}], score, final}
+    pkg: dict = field(default_factory=dict)      # W12 内容包：title/body/tags/cover/video/frames/proof
     files: list = field(default_factory=list)    # 内容包交付文件（W12）
     briefs: list = field(default_factory=list)   # CHIEF 各站任务书
     notes: list = field(default_factory=list)    # 逐站审读结论 [KEY] 一句话
@@ -194,6 +195,8 @@ class Harness:
             if rec.req is not None:
                 rec.req["final"] = s["score"]
             self.publish("req_rejected", {"id": rec.id, **s})
+        elif "pkg" in payload:
+            rec.pkg = payload["pkg"] or {}
         elif "files" in payload:
             rec.files = [str(x) for x in payload["files"].get("files", [])]
             self.publish("files", {"id": rec.id, "files": rec.files})

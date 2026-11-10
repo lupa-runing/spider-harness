@@ -56,22 +56,73 @@ def state():
     return snapshot(harness)
 
 
+@app.get("/api/tasks")
+def tasks_list():
+    """任务列表（内存中的任务，重启后用 /api/history 看磁盘历史包）。"""
+    items = []
+    for t in sorted(harness.tasks.values(), key=lambda x: x.born, reverse=True):
+        items.append({"id": t.id, "name": t.name, "wf": t.wf_id, "status": t.status,
+                      "stage": t.stage, "final": (t.req or {}).get("final", 0),
+                      "born": t.born, "files": len(t.files)})
+    return {"tasks": items}
+
+
+@app.get("/api/history")
+def history():
+    """磁盘历史内容包（outputs/ 下每个任务目录，重启不丢）。"""
+    out = []
+    root = tools.WORKSPACE
+    if root.is_dir():
+        for d in sorted(root.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
+            if not d.is_dir() or d.name.startswith(".") or d.name.startswith("_"):
+                continue
+            files = sorted(p.name for p in d.iterdir() if p.is_file() and not p.name.startswith("_"))
+            if not files:
+                continue
+            name = d.name
+            try:
+                for ln in (d / "发布说明.md").read_text(encoding="utf-8").splitlines():
+                    if ln.startswith("# "):
+                        name = ln[2:].strip()
+                        break
+            except OSError:
+                pass
+            out.append({"id": d.name, "name": name, "mtime": d.stat().st_mtime, "files": len(files)})
+    return {"history": out}
+
+
 @app.get("/api/tasks/{task_id}/result")
 def task_result(task_id: str):
-    """单个任务的完整结果：需求、逐站审读结论、模糊词补齐对照、七维评分、执行产物。"""
+    """单个任务的完整结果：需求、逐站审读结论、模糊词补齐对照、七维评分、执行产物、内容包。"""
     rec = harness.tasks.get(task_id)
-    if not rec:
+    if rec:
+        req = rec.req or {}
+        return {
+            "id": rec.id, "name": rec.name, "requirement": rec.requirement, "wf": rec.wf_id,
+            "path": rec.path, "status": rec.status, "stage": rec.stage,
+            "score": req.get("score", 0), "final": req.get("final", 0), "dims": req.get("dims"),
+            "sections": req.get("sections"),
+            "briefs": rec.briefs, "notes": rec.notes, "outputs": rec.outputs,
+            "pkg": rec.pkg, "files": rec.files,
+            "tokens": rec.tokens, "cycle": rec.cycle, "born": rec.born,
+            "provider": settings.llm_provider,
+        }
+    # 重启后的磁盘历史：从 outputs/<id>/ 重建详情
+    d = tools.WORKSPACE / task_id
+    if not d.is_dir():
         raise HTTPException(404, "task not found")
-    req = rec.req or {}
+
+    def rd(name: str) -> str:
+        p = d / name
+        return p.read_text(encoding="utf-8") if p.exists() else ""
+
+    files = sorted(p.name for p in d.iterdir() if p.is_file() and not p.name.startswith("_"))
     return {
-        "id": rec.id, "name": rec.name, "requirement": rec.requirement, "wf": rec.wf_id,
-        "path": rec.path, "status": rec.status, "stage": rec.stage,
-        "score": req.get("score", 0), "final": req.get("final", 0), "dims": req.get("dims"),
-        "sections": req.get("sections"),
-        "briefs": rec.briefs, "notes": rec.notes, "outputs": rec.outputs,
-        "files": rec.files,
-        "tokens": rec.tokens, "cycle": rec.cycle,
-        "provider": settings.llm_provider,
+        "id": task_id, "name": task_id, "requirement": "", "wf": "—", "path": [], "status": "done",
+        "stage": 0, "score": 0, "final": 0, "dims": None, "sections": [], "briefs": [],
+        "notes": [], "outputs": [], "pkg": {}, "files": [f"outputs/{task_id}/{f}" for f in files],
+        "tokens": {}, "cycle": 0, "born": d.stat().st_mtime, "provider": settings.llm_provider,
+        "copy_md": rd("文案.md"), "pub_md": rd("发布说明.md"),
     }
 
 

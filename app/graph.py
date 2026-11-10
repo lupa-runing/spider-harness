@@ -177,6 +177,8 @@ def make_role_node(agent_idx: int):
 
         # W12 小红书流水线：工位真实产出（写文案 / 画封面 / 合成视频 / 审校 / 打包）
         pkg, xhs_art = await _xhs_build(key, state, result, writer)
+        if pkg is not None and writer:
+            writer({"pkg": {"task_id": state["task_id"], "pkg": pkg}})
 
         if writer and u.output_tokens:
             writer({"usage": {"agent": agent_idx, "in": u.input_tokens, "out": u.output_tokens, "cached": u.cached_tokens}})
@@ -420,7 +422,7 @@ async def _xhs_build(key: str, state: dict, result: LLMResult, writer) -> tuple[
                     ai_n += 1
                 except Exception:
                     img = None
-            frame_out = tools.task_dir(tid) / f"_f{i}.jpg"
+            frame_out = tools.task_dir(tid) / f"分镜_{i + 1}.jpg"
             if img is not None:
                 tools.overlay_card(img, frame_out, os_t, lines, w=1080, h=1920, accent=acc, badge=f"{i + 1}/{len(segs)}")
             else:
@@ -429,7 +431,8 @@ async def _xhs_build(key: str, state: dict, result: LLMResult, writer) -> tuple[
             audio = await tools.tts(say, tools.task_dir(tid) / f"_a{i}.mp3")
             parts.append({"img": frame_out, "audio": audio, "text": say})
         rendered = await tools.render_video(tid, parts)
-        pkg.update({"video": rendered["video"], "srt": rendered["srt"], "dur": rendered["dur"]})
+        pkg.update({"video": rendered["video"], "srt": rendered["srt"], "dur": rendered["dur"],
+                    "frames": [tools.rel(p["img"]) for p in parts]})
         if writer:
             writer({"say": {"agent": 9, "text": f"成片合成 · {rendered['dur']} 秒"}})
             _emit_files(writer, tid, [rendered["video"], rendered["srt"]])
@@ -505,8 +508,10 @@ async def _xhs_build(key: str, state: dict, result: LLMResult, writer) -> tuple[
         f"- 评论区置顶：补充价格/购买方式，引导互动"
     )
     f = tools.write_file(tid, "发布说明.md", pub)
-    files = [pkg.get(k) for k in ("copy_file", "cover", "video", "srt") if pkg.get(k)] + [f]
-    pkg["all_files"] = [x for x in files if x]
+    files = [pkg.get(k) for k in ("copy_file", "cover", "video", "srt") if pkg.get(k)]
+    files += [x for x in pkg.get("frames", []) if x]
+    files.append(f)
+    pkg["all_files"] = [x for x in dict.fromkeys(files) if x]
     if writer:
         writer({"say": {"agent": 12, "text": f"内容包就绪 · {len(pkg['all_files'])} 个文件"}})
         _emit_files(writer, tid, pkg["all_files"])

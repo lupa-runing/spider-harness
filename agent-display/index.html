@@ -10303,34 +10303,74 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
   ta.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') submit(); });
 }
 
-/* ---------- 结果面板：评审报告 + 模糊词补齐对照 + 各工位产物 ---------- */
+/* ---------- 任务中心：历史任务列表 + 结果详情（视频/图片预览、文案全文复制） ---------- */
 {
-  const tools = SR.querySelector('.tools');
+  const tcTools = SR.querySelector('.tools');
   const btnR = document.createElement('button');
   btnR.className = 'tb'; btnR.type = 'button';
-  btnR.innerHTML = '▤ <b>结果</b>';
-  if (tools) tools.appendChild(btnR); else SR.appendChild(btnR);
+  btnR.innerHTML = '▤ <b>任务中心</b>';
+  if (tcTools) tcTools.appendChild(btnR); else SR.appendChild(btnR);
 
   const mask = document.createElement('div');
   mask.className = 'req-mask'; mask.hidden = true;
   mask.innerHTML = `
-    <div class="req-box req-rep" role="dialog" aria-label="任务结果">
-      <div class="req-h"><b>任务结果</b><i class="rep-meta">—</i></div>
-      <div class="rep-body">加载中…</div>
-      <div class="req-row req-acts">
-        <span class="req-hint rep-note"></span>
-        <button class="req-x rep-refresh" type="button">刷新</button>
-        <button class="req-x rep-close" type="button">关闭</button>
+    <div class="req-box tc-box" role="dialog" aria-label="任务中心">
+      <div class="tc-head">
+        <button class="req-x tc-back" type="button" hidden>← 列表</button>
+        <b class="tc-title">任务中心</b>
+        <i class="rep-meta tc-meta"></i>
+        <button class="req-x tc-close" type="button">✕</button>
       </div>
+      <div class="tc-body">
+        <div class="tc-list"></div>
+        <div class="tc-detail" hidden></div>
+      </div>
+      <div class="req-row req-acts"><span class="req-hint tc-note"></span>
+        <button class="req-x tc-refresh" type="button">刷新</button></div>
     </div>`;
   SR.appendChild(mask);
-  const st2 = document.createElement('style');
-  st2.textContent = `
-    .req-rep{width:min(680px,92vw);max-height:82vh;display:flex;flex-direction:column}
-    .rep-meta{color:#8fd4ff !important}
-    .rep-body{margin-top:12px;overflow:auto;font:400 12px/1.7 var(--cjk);color:#cfe0f8;padding-right:6px}
-    .rep-sec{margin-bottom:14px}
-    .rep-t{font:700 11px/1 var(--mono);letter-spacing:.16em;color:#bfe2ff;margin-bottom:7px;border-bottom:1px solid rgba(120,170,255,.25);padding-bottom:5px}
+  const lb = document.createElement('div');
+  lb.className = 'req-mask tc-lb'; lb.hidden = true;
+  lb.innerHTML = `<img alt="预览">`;
+  SR.appendChild(lb);
+  const stEl2 = document.createElement('style');
+  stEl2.textContent = `
+    .tc-box{width:min(860px,94vw);max-height:88vh;display:flex;flex-direction:column}
+    .tc-head{display:flex;align-items:center;gap:10px;padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid rgba(120,170,255,.25)}
+    .tc-title{font:700 14px/1 var(--mono);letter-spacing:.18em;color:#bfe2ff;flex:none}
+    .tc-meta{flex:1;font-style:normal;color:#8fd4ff !important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .tc-back{flex:none}
+    .tc-body{overflow:auto;font:400 12.5px/1.7 var(--cjk);color:#cfe0f8;min-height:220px;padding-right:6px}
+    .tc-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid rgba(120,170,255,.16);border-radius:4px;margin-bottom:8px;cursor:pointer;background:rgba(10,16,32,.5)}
+    .tc-row:hover{border-color:#8fd4ff;background:rgba(16,26,52,.7)}
+    .tc-row b{display:block;font-size:13px;color:#e8f1ff}
+    .tc-row span{font-size:11px;color:#7f93b8}
+    .tc-row-l{min-width:0;overflow:hidden}
+    .tc-row-r{text-align:right;flex:none}
+    .tc-score{color:#ffd27a;font-weight:700}
+    .tc-dim{margin-left:8px}
+    .tc-badge{display:inline-block;padding:2px 8px;border-radius:3px;font:700 10.5px/1.6 var(--cjk);margin-left:8px}
+    .tc-badge.ok{color:#0a2015;background:#7fe6b0}.tc-badge.run{color:#082038;background:#7fd4ff}
+    .tc-badge.rev{color:#33260a;background:#ffd27a}.tc-badge.no{color:#2a0a12;background:#ff9eb0}
+    .tc-badge.err{color:#2a0a12;background:#ff8f8f}.tc-badge.his{color:#cfe0f8;background:rgba(120,170,255,.25)}
+    .tc-sec{margin-bottom:16px}
+    .tc-sec-t{font:700 11px/1 var(--mono);letter-spacing:.16em;color:#bfe2ff;margin-bottom:8px;border-bottom:1px solid rgba(120,170,255,.25);padding-bottom:5px}
+    .tc-video{width:100%;max-height:420px;border-radius:4px;background:#000;display:block}
+    .tc-gal{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+    .tc-img{width:132px;height:176px;object-fit:cover;border-radius:4px;cursor:zoom-in;border:1px solid rgba(120,170,255,.3)}
+    .tc-img.first{width:168px;height:224px;border-color:#ffd27a}
+    .tc-copy{position:relative;border:1px solid rgba(120,170,255,.28);border-radius:4px;padding:12px 14px;background:rgba(4,8,18,.6)}
+    .tc-copy-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+    .tc-copy-t{font:700 15px/1.4 var(--cjk);color:#ffe9f2}
+    .tc-copy-b{white-space:pre-wrap;word-break:break-word;color:#dfe9f8}
+    .tc-tags{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+    .tc-tags i{font-style:normal;font-size:11px;color:#8fd4ff;background:rgba(90,160,255,.14);border-radius:3px;padding:2px 7px}
+    .tc-btn{font:700 11px/1 var(--cjk);color:#0a0710;background:linear-gradient(90deg,#ffb48f,#ff6fae);border:none;border-radius:3px;padding:6px 12px;cursor:pointer}
+    .tc-btn.ghost{color:#9fb4d8;background:rgba(8,14,28,.8);border:1px solid rgba(120,170,255,.25)}
+    .tc-md{white-space:pre-wrap;word-break:break-word}
+    .tc-lb{z-index:80;align-items:center;justify-content:center}
+    .tc-lb img{max-width:92vw;max-height:88vh;border-radius:4px;box-shadow:0 30px 80px rgba(0,0,0,.7)}
+    .rep-meta{color:#8fd4ff !important;font-style:normal}
     .rep-line{margin:3px 0;white-space:pre-wrap;word-break:break-word}
     .rep-line b{color:#ffd27a;font-weight:600}
     .rep-dim{display:flex;align-items:center;gap:8px;margin:4px 0}
@@ -10338,53 +10378,139 @@ host.__nebula = {AG, WF, LIVEH, applyLive, log, comet, walkTo, readWord, retract
     .rep-dim u{text-decoration:none;flex:1;height:8px;background:rgba(120,170,255,.14);border-radius:4px;overflow:hidden}
     .rep-dim u s{display:block;height:100%;background:linear-gradient(90deg,#5fa8ff,#8fd4ff)}
     .rep-dim b{width:30px;text-align:right;font-weight:600;color:#e8f1ff;flex:none}
-    .rep-badge{display:inline-block;margin-left:10px;padding:2px 8px;border-radius:3px;font:700 11px/1.5 var(--cjk)}
-    .rep-badge.ok{color:#0a2015;background:#7fe6b0}
-    .rep-badge.no{color:#2a0a12;background:#ff9eb0}
-    .rep-note{color:#7f93b8 !important}
   `;
-  SR.appendChild(st2);
+  SR.appendChild(stEl2);
 
-  const body = mask.querySelector('.rep-body'), meta = mask.querySelector('.rep-meta'),
-        note = mask.querySelector('.rep-note'), rfr = mask.querySelector('.rep-refresh'),
-        xbtn = mask.querySelector('.rep-close');
+  const q = s => mask.querySelector(s);
+  const el = {list: q('.tc-list'), detail: q('.tc-detail'), title: q('.tc-title'), meta: q('.tc-meta'),
+              back: q('.tc-back'), note: q('.tc-note'), refresh: q('.tc-refresh'), close: q('.tc-close')};
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const render = d => {
-    const axes = ['完整', '可执行', '可度量', '负责人', '截止', '无歧义', '可验收'];
-    const pass = d.final >= PASS;
-    const stTxt = d.status === 'done' ? '已交付' : d.status === 'rejected' ? '未过线退回' :
-                  d.status === 'running' ? (d.final ? '已派单 · 执行中' : '评审中') : d.status;
-    meta.innerHTML = `${esc(d.id)} · ${esc(d.name)} · ${esc(d.wf)} · ${esc(stTxt)}` +
-      (d.final ? `<span class="rep-badge ${pass ? 'ok' : 'no'}">${d.final} 分 ${pass ? '过线派单' : '未过线'}</span>` : '');
-    let h = `<div class="rep-sec"><div class="rep-t">需求原文</div><div class="rep-line">${esc(d.requirement)}</div></div>`;
+  const fmtT = ts => { if (!ts) return ''; const d = new Date(ts * 1000);
+    return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  const badge = (st, final) => {
+    if (st === 'done') return `<span class="tc-badge ok">已交付</span>`;
+    if (st === 'rejected') return `<span class="tc-badge no">未过线</span>`;
+    if (st === 'failed') return `<span class="tc-badge err">异常</span>`;
+    if (st === 'running') return final ? `<span class="tc-badge run">已派单·执行中</span>` : `<span class="tc-badge rev">评审中</span>`;
+    return `<span class="tc-badge his">历史包</span>`;
+  };
+  const lightbox = src => { lb.querySelector('img').src = src; lb.hidden = false; };
+  lb.addEventListener('click', () => { lb.hidden = true; });
+
+  /* ---- 列表 ---- */
+  const rowHTML = t => `
+    <div class="tc-row" data-id="${esc(t.id)}">
+      <div class="tc-row-l"><b>${esc(t.name || t.id)}</b>
+        <span>${esc(t.id)} · ${esc(t.wf || '')}${t.born || t.mtime ? ' · ' + fmtT(t.born || t.mtime) : ''}</span></div>
+      <div class="tc-row-r">${badge(t.status, t.final)}${t.final ? `<b class="tc-score tc-dim">${t.final} 分</b>` : ''}${t.files ? `<span class="tc-dim">${t.files} 文件</span>` : ''}</div>
+    </div>`;
+  const loadList = async () => {
+    try {
+      const [m, h] = await Promise.all([
+        fetch('/api/tasks').then(r => r.json()).catch(() => ({tasks: []})),
+        fetch('/api/history').then(r => r.json()).catch(() => ({history: []}))]);
+      const mem = m.tasks || [];
+      const rows = [...mem, ...(h.history || []).filter(x => !mem.some(t => t.id === x.id))
+        .map(x => ({...x, status: 'hist', wf: '', born: x.mtime}))].reverse();
+      el.list.innerHTML = rows.length ? rows.map(rowHTML).join('')
+        : '还没有任务——点「＋ 提需求」提交一个需求，审读过线后内容包会出现在这里。';
+      el.list.querySelectorAll('[data-id]').forEach(n => n.addEventListener('click', () => openDetail(n.dataset.id)));
+      if (!rows.length) return;
+    } catch (e) { el.list.innerHTML = '加载失败：' + esc(e.message); }
+  };
+
+  /* ---- 详情 ---- */
+  const parseCopy = d => {
+    if (d.pkg && (d.pkg.title || d.pkg.body)) return d.pkg;
+    const md = d.copy_md || '';
+    if (!md) return null;
+    const lines = md.split('\n');
+    const title = (lines.find(l => l.startsWith('# ')) || '').slice(2).trim();
+    const tagIdx = lines.findIndex((l, i) => i > 0 && /^#[^\s#]/.test(l.trim()) && l.trim().includes('#'));
+    const body = lines.slice(1, tagIdx > 0 ? tagIdx : lines.length).join('\n').trim();
+    const tags = tagIdx > 0 ? lines[tagIdx].trim().split(/\s+/).filter(x => x.startsWith('#')) : [];
+    return {title, body, tags};
+  };
+  const detailHTML = d => {
+    const files = d.files || [];
+    const video = files.find(f => /\.mp4$/i.test(f)) || (d.pkg && d.pkg.video);
+    const cover = files.find(f => f.includes('封面')) || (d.pkg && d.pkg.cover);
+    const frames = (d.pkg && d.pkg.frames) || files.filter(f => /分镜/.test(f));
+    const imgs = [...new Set([cover, ...frames].filter(Boolean))];
+    const cp = parseCopy(d);
+    let h = '';
+    if (d.requirement) h += `<div class="tc-sec"><div class="tc-sec-t">需求原文</div><div class="tc-md">${esc(d.requirement)}</div></div>`;
+    if (video) h += `<div class="tc-sec"><div class="tc-sec-t">成片预览${d.pkg && d.pkg.dur ? ' · ' + d.pkg.dur + ' 秒' : ''}</div>
+      <video class="tc-video" controls preload="metadata" src="/${esc(video)}"></video></div>`;
+    if (cp && (cp.title || cp.body)) {
+      h += `<div class="tc-sec"><div class="tc-sec-t">发布文案（复制即用）</div><div class="tc-copy">
+        <div class="tc-copy-h"><b class="tc-copy-t">${esc(cp.title || '')}</b>
+          <button class="tc-btn" data-copy="${esc(Date.now())}">复制全文</button></div>
+        <div class="tc-copy-b">${esc(cp.body || '')}</div>
+        ${(cp.tags || []).length ? `<div class="tc-tags">${cp.tags.map(t => `<i>${esc(t)}</i>`).join('')}</div>` : ''}
+      </div></div>`;
+      window.__tcCopyText = `${cp.title || ''}\n\n${cp.body || ''}\n\n${(cp.tags || []).join(' ')}`;
+    }
+    if (imgs.length) h += `<div class="tc-sec"><div class="tc-sec-t">图片（点击放大）</div><div class="tc-gal">` +
+      imgs.map((f, i) => `<img class="tc-img${i === 0 ? ' first' : ''}" loading="lazy" src="/${esc(f)}" data-full="/${esc(f)}" alt="图${i + 1}">`).join('') + `</div></div>`;
     if (d.dims && d.dims.length === 7) {
-      h += `<div class="rep-sec"><div class="rep-t">七维需求质量</div>` + d.dims.map((v, i) =>
+      const axes = ['完整', '可执行', '可度量', '负责人', '截止', '无歧义', '可验收'];
+      h += `<div class="tc-sec"><div class="tc-sec-t">七维需求质量</div>` + d.dims.map((v, i) =>
         `<div class="rep-dim"><em>${axes[i] || i}</em><u><s style="width:${clamp(v, 0, 100)}%"></s></u><b>${v}</b></div>`).join('') + `</div>`;
     }
-    const vagues = (d.sections || []).map(s => (s.words || []).filter(w => w.kind === 'vague').map(w => `<div class="rep-line"><b>${esc(w.w)}</b> → ${esc(w.fix || '（未补齐）')}</div>`).join('')).join('');
-    if (vagues) h += `<div class="rep-sec"><div class="rep-t">模糊词 → CHIEF 补齐</div>${vagues}</div>`;
-    if ((d.notes || []).length) h += `<div class="rep-sec"><div class="rep-t">逐站审读结论</div>` +
+    const vagues = (d.sections || []).map(s => (s.words || []).filter(w => w.kind === 'vague')
+      .map(w => `<div class="rep-line"><b>${esc(w.w)}</b> → ${esc(w.fix || '（未补齐）')}</div>`).join('')).join('');
+    if (vagues) h += `<div class="tc-sec"><div class="tc-sec-t">模糊词 → CHIEF 补齐</div>${vagues}</div>`;
+    if ((d.notes || []).length) h += `<div class="tc-sec"><div class="tc-sec-t">逐站审读结论</div>` +
       d.notes.map(n => `<div class="rep-line">${esc(n)}</div>`).join('') + `</div>`;
-    if ((d.outputs || []).length) h += `<div class="rep-sec"><div class="rep-t">执行产物（各工位产出）</div>` +
+    if ((d.outputs || []).length) h += `<div class="tc-sec"><div class="tc-sec-t">执行产物（各工位产出）</div>` +
       d.outputs.map(o => `<div class="rep-line">${esc(o)}</div>`).join('') + `</div>`;
-    if ((d.files || []).length) h += `<div class="rep-sec"><div class="rep-t">交付文件（点击打开/下载）</div>` +
-      d.files.map(f => `<div class="rep-line"><a href="/${esc(f)}" target="_blank" download style="color:#8fd4ff">▾ ${esc(f.split('/').pop())}</a> <span style="color:#7f93b8">· ${esc(f)}</span></div>`).join('') + `</div>`;
-    else if (d.final >= PASS && d.status === 'running') h += `<div class="rep-sec"><div class="rep-t">执行产物</div><div class="rep-line">已派单，执行阶段进行中——交付后回来刷新。</div></div>`;
-    note.textContent = d.provider === 'mock' ? '当前是 mock 占位产物 · 接真实 LLM 后此处为各工位真实生成内容' : '';
-    body.innerHTML = h;
+    if (d.pub_md) h += `<div class="tc-sec"><div class="tc-sec-t">发布说明</div><div class="tc-md">${esc(d.pub_md)}</div></div>`;
+    if (files.length) h += `<div class="tc-sec"><div class="tc-sec-t">交付文件（点击打开/下载）</div>` +
+      files.map(f => `<div class="rep-line"><a href="/${esc(f)}" target="_blank" style="color:#8fd4ff">▾ ${esc(f.split('/').pop())}</a> <span style="color:#7f93b8">· ${esc(f)}</span></div>`).join('') + `</div>`;
+    return h || '暂无数据';
   };
-  const load = () => {
-    if (!lastRealId) { meta.textContent = '—'; body.textContent = '还没有真实任务——先点「＋ 提需求」提交一个。'; return; }
-    body.textContent = '加载中…';
-    fetch(`/api/tasks/${lastRealId}/result`).then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
-      .then(render).catch(e => { body.textContent = '加载失败：' + e.message; });
+  const openDetail = async id => {
+    el.list.hidden = true; el.detail.hidden = false; el.back.hidden = false;
+    el.title.textContent = '任务详情'; el.meta.textContent = id; el.note.textContent = '';
+    el.detail.innerHTML = '加载中…';
+    const d = await fetch(`/api/tasks/${id}/result`).then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+      .catch(e => ({err: e.message}));
+    if (d.err) { el.detail.innerHTML = '加载失败：' + esc(d.err); return; }
+    const pass = d.final >= PASS;
+    el.meta.innerHTML = `${esc(d.status === 'done' ? '已交付' : d.status === 'rejected' ? '未过线' : d.status === 'running' ? (d.final ? '已派单·执行中' : '评审中') : d.status)}` +
+      (d.final ? ` · <b style="color:${pass ? '#7fe6b0' : '#ff9eb0'}">${d.final} 分</b>` : '');
+    el.detail.innerHTML = detailHTML(d);
+    const copyBtn = el.detail.querySelector('[data-copy]');
+    if (copyBtn) copyBtn.addEventListener('click', async () => {
+      const txt = window.__tcCopyText || '';
+      try { await navigator.clipboard.writeText(txt); el.note.textContent = '已复制到剪贴板 ✓'; }
+      catch (e) {
+        const t = document.createElement('textarea'); t.value = txt; SR.appendChild(t); t.select();
+        try { document.execCommand('copy'); el.note.textContent = '已复制 ✓'; } catch (e2) { el.note.textContent = '复制失败，请手动选择'; }
+        t.remove();
+      }
+      setTimeout(() => { el.note.textContent = ''; }, 2000);
+    });
+    el.detail.querySelectorAll('img.tc-img').forEach(im => im.addEventListener('click', () => lightbox(im.dataset.full)));
   };
-  btnR.addEventListener('click', () => { mask.hidden = false; load(); });
-  rfr.addEventListener('click', load);
-  xbtn.addEventListener('click', () => { mask.hidden = true; });
-  mask.addEventListener('click', e => { if (e.target === mask) mask.hidden = true; });
-  document.addEventListener('keydown', e => {           // capture：Esc 优先关最上层弹窗
-    if (e.key === 'Escape' && !mask.hidden) { e.stopImmediatePropagation(); mask.hidden = true; }
+
+  /* ---- 视图切换 ---- */
+  const open = () => { mask.hidden = false; el.back.hidden = true; el.detail.hidden = true; el.list.hidden = false;
+    el.title.textContent = '任务中心'; el.meta.textContent = ''; loadList();
+    clearInterval(window.__tcTimer); window.__tcTimer = setInterval(() => { if (!el.list.hidden) loadList(); }, 4000); };
+  const close = () => { mask.hidden = true; clearInterval(window.__tcTimer); };
+  const back = () => { el.detail.hidden = true; el.list.hidden = false; el.back.hidden = true;
+    el.title.textContent = '任务中心'; el.meta.textContent = ''; clearInterval(window.__tcTimer);
+    window.__tcTimer = setInterval(() => { if (!el.list.hidden) loadList(); }, 4000); loadList(); };
+  btnR.addEventListener('click', open);
+  el.back.addEventListener('click', back);
+  el.refresh.addEventListener('click', () => { el.list.hidden ? openDetail(el.meta.textContent.split(' ·')[0]) : loadList(); });
+  el.close.addEventListener('click', close);
+  mask.addEventListener('click', e => { if (e.target === mask) close(); });
+  document.addEventListener('keydown', e => {           // capture：Esc 关最上层
+    if (e.key === 'Escape' && !lb.hidden) { e.stopImmediatePropagation(); lb.hidden = true; return; }
+    if (e.key === 'Escape' && !mask.hidden) { e.stopImmediatePropagation(); close(); }
   }, true);
 }
 
